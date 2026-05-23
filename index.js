@@ -1,13 +1,19 @@
-import express from "express";
+import express from 'express';
+import multer from "multer";
 import bodyParser from "body-parser";
-const app = express();
+import csv from "csv-parser";
+
 const port = 3000;
-app.use(bodyParser.urlencoded({ extended: true }));
-app.use(express.static("public"));
-app.set("view engine", "ejs");
-app.get("/", (req, res) => {
-    res.render("index.ejs");
+
+const upload = multer({ storage: multer.memoryStorage() }); 
+
+const app = express();
+app.use(bodyParser.json());
+app.get('/', (req, res) => {
+  console.log('Received a request at /');
+  res.render("index.ejs");
 });
+
 app.listen(port, () => {
-    console.log(`Listening on port ${port}`);
+  console.log(`Server is running on port ${port}.`);
 });
