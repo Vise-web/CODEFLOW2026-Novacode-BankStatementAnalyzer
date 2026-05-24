@@ -2,7 +2,7 @@ import express from 'express';
 import multer from 'multer';
 import bodyParser from 'body-parser';
 import Papa from 'papaparse';
-import pdfParse from 'pdf-parse';
+//import pdfParse from 'pdf-parse';
 
 const port = 3000;
 const upload = multer({ storage: multer.memoryStorage() });
