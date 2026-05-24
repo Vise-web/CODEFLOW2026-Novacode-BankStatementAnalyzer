@@ -2,100 +2,312 @@ import express from 'express';
 import multer from 'multer';
 import bodyParser from 'body-parser';
 import Papa from 'papaparse';
-//import PDFParse from 'pdf-parse';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { createRequire } from 'module';
 import dotenv from 'dotenv';
+
 dotenv.config();
- 
+
+// DEBUG ENV
+console.log(process.env.GEMINI_API_KEY);
+
+const require = createRequire(import.meta.url);
+const PDFParser = require('pdf2json');
+
+const app = express();
 
 const port = process.env.PORT || 3000;
-const upload = multer({ storage: multer.memoryStorage() });
-const app = express();
-const genAI = new GoogleGenerativeAI({ apiKey: process.env.GENAI_API_KEY });
-app.use(express.static('public')); 
+
+app.set('view engine', 'ejs');
+
+app.use(express.static('public'));
 app.use(bodyParser.json());
 
-app.get('/', (req, res) => {
-  res.render("index.ejs");
+// MEMORY STORAGE
+const upload = multer({
+  storage: multer.memoryStorage()
 });
 
-app.post('/upload', upload.single('statement'), async (req, res) => {
-  if (!req.file) {
-    return res.status(400).json({ error: 'No file uploaded' });
-  }
+// GEMINI
+const genAI = new GoogleGenerativeAI(
+  process.env.GEMINI_API_KEY
+);
 
-  const { mimetype, originalname, buffer } = req.file;
-  let transactions = [];
+// HOME PAGE
+app.get('/', (req, res) => {
 
-  try {
-    // ── CSV ──────────────────────────────────────────────────────────────
-    if (mimetype === 'text/csv' || originalname.endsWith('.csv')) {
-      const result = Papa.parse(buffer.toString(), {
-        header: true,
-        skipEmptyLines: true,
-        transformHeader: h => h.trim().toLowerCase(),
-      });
+  res.render('index.ejs');
 
-      if (result.errors.length) {
-        return res.status(400).json({ error: 'CSV parse error', details: result.errors });
+});
+
+// UPLOAD ROUTE
+app.post(
+  '/upload',
+  upload.single('statement'),
+  async (req, res) => {
+
+    console.log('UPLOAD HIT');
+
+    console.log(req.file);
+
+    // NO FILE
+    if (!req.file) {
+
+      return res.send(
+        'No file uploaded'
+      );
+
+    }
+
+    const {
+      mimetype,
+      originalname,
+      buffer
+    } = req.file;
+
+    let transactions = [];
+
+    try {
+
+      // CSV FILE
+      if (
+        mimetype === 'text/csv' ||
+        originalname.endsWith('.csv')
+      ) {
+
+        console.log('CSV DETECTED');
+
+        const result = Papa.parse(
+          buffer.toString(),
+          {
+            header: true,
+            skipEmptyLines: true,
+            transformHeader: h =>
+              h.trim().toLowerCase(),
+          }
+        );
+
+        transactions =
+          result.data.map(
+            row => normalise(row)
+          );
+
       }
 
-      transactions = result.data.map(row => normalise(row));
+      // PDF FILE
+      else if (
+        mimetype === 'application/pdf' ||
+        originalname.endsWith('.pdf')
+      ) {
 
-    // ── PDF ──────────────────────────────────────────────────────────────
-    } else if (mimetype === 'application/pdf' || originalname.endsWith('.pdf')) {
-      const { text } = await pdfParse(buffer);
-      transactions = extractFromPdfText(text);
+        console.log('PDF DETECTED');
 
-    } else {
-      return res.status(415).json({ error: 'Unsupported file type. Upload a CSV or PDF.' });
-    }
+        const text =
+          await parsePDF(buffer);
 
-    // transactions is now a clean array ready for your analysis functions
-    res.json({ count: transactions.length, transactions });
+        console.log('PDF TEXT EXTRACTED');
 
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to parse file', details: err.message });
-  }
-});
+        console.log(text);
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+        // RAW PDF TEXT
+        transactions = [
 
-// Normalise a CSV row — adjust field names to match your bank's columns
-function normalise(row) {
-  return {
-    date:        row.date        || row['transaction date'] || '',
-    description: (row.description || row.narration || row.details || '').trim().toLowerCase(),
-    amount:      parseFloat(row.amount || row.debit || row.credit || 0),
-    type:        row.debit ? 'debit' : 'credit',
-  };
-}
+          {
 
-// Extract transactions from raw PDF text using regex
-// This pattern looks for lines 
-// Adjust the regex to match your bank's PDF layout
-function extractFromPdfText(text) {
-  const lines = text.split('\n');
-  const txnPattern = /(\d{2}[\/\-]\d{2}[\/\-]\d{4})\s+(.+?)\s+([\-\d,]+\.\d{2})/;
-  const transactions = [];
+            date:
+              'PDF Upload',
 
-  for (const line of lines) {
-    const match = line.match(txnPattern);
-    if (match) {
-      const amount = parseFloat(match[3].replace(/,/g, ''));
-      transactions.push({
-        date:        match[1],
-        description: match[2].trim().toLowerCase(),
-        amount:      Math.abs(amount),
-        type:        amount < 0 ? 'debit' : 'credit',
+            description:
+              text.substring(0, 1000),
+
+            amount:
+              0,
+
+            type:
+              'info'
+
+          }
+
+        ];
+
+      }
+
+      // INVALID FILE
+      else {
+
+        return res.send(
+          'Upload PDF or CSV only'
+        );
+
+      }
+
+      console.log('TRANSACTIONS CREATED');
+
+      console.log(transactions);
+
+      // GEMINI MODEL
+      const model =
+        genAI.getGenerativeModel({
+          model: 'gemini-1.5-flash'
+        });
+
+      console.log('SENDING TO GEMINI');
+
+      // GEMINI REQUEST
+      const result =
+        await model.generateContent(`
+
+Analyze this bank statement and provide:
+
+1. Total spending
+2. Spending categories
+3. Saving insights
+4. Unusual transactions
+5. Financial advice
+
+Statement Data:
+
+${JSON.stringify(transactions)}
+
+`);
+
+      console.log('GEMINI RESPONSE RECEIVED');
+
+      // GEMINI RESPONSE
+      const aiResponse =
+        result.response.text();
+
+      console.log(aiResponse);
+
+      // RESULT PAGE
+      res.render('result.ejs', {
+
+        count:
+          transactions.length,
+
+        transactions,
+
+        analysis:
+          aiResponse
+
       });
-    }
-  }
 
-  return transactions;
+    }
+
+    catch (err) {
+
+      console.error('FULL ERROR:');
+
+      console.error(err);
+
+      res.send(err.message);
+
+    }
+
+  }
+);
+
+// PDF PARSER
+function parsePDF(buffer) {
+
+  return new Promise((resolve, reject) => {
+
+    const pdfParser =
+      new PDFParser();
+
+    pdfParser.on(
+      'pdfParser_dataError',
+      err => reject(err)
+    );
+
+    pdfParser.on(
+      'pdfParser_dataReady',
+      pdfData => {
+
+        let text = '';
+
+        pdfData.Pages.forEach(page => {
+
+          page.Texts.forEach(txt => {
+
+            txt.R.forEach(r => {
+
+              try {
+
+                text +=
+                  decodeURIComponent(r.T)
+                  + ' ';
+
+              }
+
+              catch {
+
+                text +=
+                  r.T + ' ';
+
+              }
+
+            });
+
+          });
+
+          text += '\n';
+
+        });
+
+        resolve(text);
+
+      }
+    );
+
+    pdfParser.parseBuffer(buffer);
+
+  });
+
 }
 
+// NORMALISE CSV
+function normalise(row) {
+
+  return {
+
+    date:
+      row.date ||
+      row['transaction date'] ||
+      '',
+
+    description:
+      (
+        row.description ||
+        row.narration ||
+        row.details ||
+        ''
+      )
+      .trim()
+      .toLowerCase(),
+
+    amount:
+      parseFloat(
+        row.amount ||
+        row.debit ||
+        row.credit ||
+        0
+      ),
+
+    type:
+      row.debit
+        ? 'debit'
+        : 'credit',
+
+  };
+
+}
+
+// START SERVER
 app.listen(port, () => {
-  console.log(`Server running on port ${port}`);
+
+  console.log(
+    `Server running on port ${port}`
+  );
+
 });
