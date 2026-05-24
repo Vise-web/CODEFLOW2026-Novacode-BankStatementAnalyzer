@@ -1,4 +1,5 @@
 {
+  "type": "module",
   "dependencies": {
     "body-parser": "^2.2.2",
     "csv-parser": "^3.2.1",
