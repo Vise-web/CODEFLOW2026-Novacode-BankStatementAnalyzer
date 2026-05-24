@@ -7,6 +7,7 @@ import Papa from 'papaparse';
 const port = 3000;
 const upload = multer({ storage: multer.memoryStorage() });
 const app = express();
+app.use(express.static('public'));
 app.use(bodyParser.json());
 
 app.get('/', (req, res) => {
