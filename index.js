@@ -2,12 +2,17 @@ import express from 'express';
 import multer from 'multer';
 import bodyParser from 'body-parser';
 import Papa from 'papaparse';
-//import pdfParse from 'pdf-parse';
+//import PDFParse from 'pdf-parse';
+import { GoogleGenerativeAI } from '@google/generative-ai';
+import dotenv from 'dotenv';
+dotenv.config();
+ 
 
-const port = 3000;
+const port = process.env.PORT || 3000;
 const upload = multer({ storage: multer.memoryStorage() });
 const app = express();
-app.use(express.static('public'));
+const genAI = new GoogleGenerativeAI({ apiKey: process.env.GENAI_API_KEY });
+app.use(express.static('public')); 
 app.use(bodyParser.json());
 
 app.get('/', (req, res) => {
