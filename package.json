@@ -1,12 +1,23 @@
 {
+  "name": "statement-analyzer",
+  "version": "1.0.0",
+  "description": "Analyzes bank statements",
+  "homepage": "https://github.com/Vise-web/CODEFLOW2026-Novacode-BankStatementAnalyzer#readme",
+  "bugs": {
+    "url": "https://github.com/Vise-web/CODEFLOW2026-Novacode-BankStatementAnalyzer/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Vise-web/CODEFLOW2026-Novacode-BankStatementAnalyzer.git"
+  },
+  "license": "ISC",
+  "author": "",
   "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
   "dependencies": {
-    "body-parser": "^2.2.2",
-    "csv-parser": "^3.2.1",
-    "ejs": "^5.0.2",
-    "express": "^5.2.1",
-    "multer": "^2.1.1",
-    "papaparse": "^5.5.3",
-    "pdf-parse": "^2.4.5"
+    "express": "^5.2.1"
   }
 }
